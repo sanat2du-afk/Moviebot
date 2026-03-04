@@ -9,12 +9,12 @@ from rapidfuzz import process, fuzz
 from imdb import IMDb
 
 # Environment Variables
-API_ID = int(os.environ.get("API_ID"))
-API_HASH = os.environ.get("API_HASH")
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-MONGO_URI = os.environ.get("MONGO_URI")
-LOG_CHANNEL = int(os.environ.get("LOG_CHANNEL"))
-FORCE_SUB_CHANNEL = os.environ.get("FORCE_SUB_CHANNEL")
+API_ID = int(os.environ.get("28473056"))
+API_HASH = os.environ.get("65dd11a5bed33d2b43c997e4cbc3dee2")
+BOT_TOKEN = os.environ.get("8045819879:AAG-Z205mYi0m6Fr1kYGdJv7c1P74ssUatA")
+MONGO_URI = os.environ.get("mongodb+srv://rinamurmu231:rinamurmu231@badsha.xp8bc.mongodb.net")
+LOG_CHANNEL = int(os.environ.get("-1003631139746"))
+FORCE_SUB_CHANNEL = os.environ.get("-1003322923993")
 AUTO_DELETE_TIME = int(os.environ.get("AUTO_DELETE_TIME", 300))
 
 app = Client("MovieBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
