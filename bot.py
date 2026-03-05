@@ -1,4 +1,3 @@
-
 import os
 import re
 import asyncio
@@ -8,14 +7,23 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from rapidfuzz import process, fuzz
 from imdb import IMDb
 
-# Environment Variables
-API_ID = int(os.environ.get("28473056"))
-API_HASH = os.environ.get("")
-BOT_TOKEN = os.environ.get("")
-MONGO_URI = os.environ.get("")
-LOG_CHANNEL = int(os.environ.get(""))
-FORCE_SUB_CHANNEL = os.environ.get("")
+# ================= ENV VARIABLES ================= #
+
+def get_env(name):
+    value = os.environ.get(name)
+    if not value:
+        raise ValueError(f"Missing environment variable: {name}")
+    return value
+
+API_ID = int(get_env("28473056"))
+API_HASH = get_env("65dd11a5bed33d2b43c997e4cbc3dee2")
+BOT_TOKEN = get_env("BOT_TOKEN")
+MONGO_URI = get_env("MONGO_URI")
+LOG_CHANNEL = int(get_env("LOG_CHANNEL"))
+FORCE_SUB_CHANNEL = get_env("FORCE_SUB_CHANNEL")
 AUTO_DELETE_TIME = int(os.environ.get("AUTO_DELETE_TIME", 300))
+
+# ================= INIT ================= #
 
 app = Client("MovieBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
@@ -28,7 +36,7 @@ ia = IMDb()
 SEARCH_CACHE = {}
 PAGE_SIZE = 5
 
-# ---------------- UTIL FUNCTIONS ---------------- #
+# ================= UTIL FUNCTIONS ================= #
 
 def clean_query(text):
     text = re.sub(r"\b(1080p|720p|480p|hdrip|bluray|x264|hindi|english|esubs)\b", "", text, flags=re.I)
@@ -53,13 +61,16 @@ async def fetch_imdb(query):
         search = ia.search_movie(query)
         if not search:
             return None
+
         movie = ia.get_movie(search[0].movieID)
+
         title = movie.get("title", "N/A")
         year = movie.get("year", "N/A")
         rating = movie.get("rating", "N/A")
         genres = ", ".join(movie.get("genres", []))
         plot = movie.get("plot outline", "No description available.")
         poster = movie.get("cover url")
+
         caption = f"""
 🎬 <b>{title} ({year})</b>
 
@@ -69,54 +80,75 @@ async def fetch_imdb(query):
 📝 <b>Story:</b>
 {plot}
 """
+
         return poster, caption
     except:
         return None
 
 async def hybrid_search(query):
     query = clean_query(query)
+
     regex_filter = {"file_name": {"$regex": query, "$options": "i"}}
     results = []
+
     async for file in collection.find(regex_filter).limit(20):
         results.append(file)
+
     if results:
         return results
 
+    # Fallback RapidFuzz
     all_files = []
     async for file in collection.find({}):
         all_files.append(file)
+
     names = [f["file_name"] for f in all_files]
+
     matches = process.extract(query, names, scorer=fuzz.token_sort_ratio, limit=15)
+
     final = []
     for name, score, index in matches:
         if score > 65:
             final.append(all_files[index])
+
     return final
 
 def get_page_buttons(key, page):
     files = SEARCH_CACHE.get(key, [])
     start = page * PAGE_SIZE
     end = start + PAGE_SIZE
+
     buttons = []
+
     for file in files[start:end]:
-        buttons.append([InlineKeyboardButton(file["file_name"][:40], callback_data=f"file#{file['file_id']}")])
+        buttons.append([
+            InlineKeyboardButton(
+                file["file_name"][:40],
+                callback_data=f"file#{file['file_id']}"
+            )
+        ])
+
     nav = []
     if start > 0:
         nav.append(InlineKeyboardButton("⬅️ Back", callback_data=f"page#{key}#{page-1}"))
     if end < len(files):
         nav.append(InlineKeyboardButton("Next ➡️", callback_data=f"page#{key}#{page+1}"))
+
     if nav:
         buttons.append(nav)
+
     return InlineKeyboardMarkup(buttons)
 
-# ---------------- SAVE FILES ---------------- #
+# ================= SAVE FILES ================= #
 
 @app.on_message(filters.chat(LOG_CHANNEL))
 async def save_files(client, message):
     if message.document or message.video:
         file = message.document or message.video
         file_name = file.file_name.lower()
+
         file_type, season, episode = detect_type(file_name)
+
         await collection.insert_one({
             "file_name": file_name,
             "file_id": file.file_id,
@@ -125,20 +157,26 @@ async def save_files(client, message):
             "episode": episode
         })
 
-# ---------------- SEARCH ---------------- #
+# ================= SEARCH ================= #
 
 @app.on_message(filters.group & filters.text)
 async def search_movie(client, message):
+
     query = message.text
     results = await hybrid_search(query)
+
     if not results:
         return await message.reply("❌ Movie/Series Not Found")
+
     key = f"{message.chat.id}_{message.id}"
     SEARCH_CACHE[key] = results
+
     markup = get_page_buttons(key, 0)
+
     await message.reply("🎬 Select your file:", reply_markup=markup)
 
     poster_data = await fetch_imdb(query)
+
     if poster_data:
         poster, caption = poster_data
         try:
@@ -146,29 +184,31 @@ async def search_movie(client, message):
         except:
             await message.reply_text(caption, parse_mode="html")
 
-# ---------------- CALLBACK ---------------- #
+# ================= CALLBACK ================= #
 
 @app.on_callback_query()
 async def callback_handler(client, query):
     data = query.data
+
     if data.startswith("file#"):
         file_id = data.split("#")[1]
         msg = await query.message.reply_document(file_id)
+
         await asyncio.sleep(AUTO_DELETE_TIME)
         await msg.delete()
+
     elif data.startswith("page#"):
         _, key, page = data.split("#")
         page = int(page)
         markup = get_page_buttons(key, page)
         await query.message.edit_reply_markup(markup)
+
     await query.answer()
+
+# ================= START ================= #
 
 async def main():
     await create_indexes()
-    await app.start()
-    print("Bot started successfully")
-    await idle()
-
-from pyrogram import idle
+    print("Bot Started Successfully")
 
 app.run()
