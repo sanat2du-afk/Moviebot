@@ -9,7 +9,7 @@ from rapidfuzz import process, fuzz
 from imdb import IMDb
 
 # Environment Variables
-API_ID = int(os.environ.get(""))
+API_ID = int(os.environ.get("28473056"))
 API_HASH = os.environ.get("")
 BOT_TOKEN = os.environ.get("")
 MONGO_URI = os.environ.get("")
